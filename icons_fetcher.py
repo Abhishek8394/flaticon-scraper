@@ -6,11 +6,11 @@ PY3 = sys.version_info[0] == 3
 if PY3:
     from urllib.request import urlopen
     from urllib.parse import urlencode, urlparse
-    from urllib.error import URLError
+    from urllib.error import URLError, HTTPError
 else:
      from urllib import urlopen, urlencode
      import urlparse
-     from urllib2 import URLError
+     from urllib2 import URLError, HTTPError
 from lxml import html, etree
 import json
 import time
@@ -33,7 +33,7 @@ def url_fetch(targeturl, attempt=0, num_retries=5, retry_interval=10):
     except URLError as ue:
         # sometimes the connection gets reset when a lot of requests are made.
         if e.errno == errno.ECONNRESET and attempt < num_retries:
-            time.sleep(retry_interval)
+            time.sleep(retry_interval)            
             return img_fetch(targeturl, attempt + 1, num_retries, retry_interval)
         else:
             raise ue
@@ -98,7 +98,14 @@ def fetch_icons(search_term, out_dir):
     """
     search_url = "https://www.flaticon.com/search?" + urlencode({"word": search_term})    
     # download and parse html
-    page = urlopen(search_url)
+    try:
+        page = urlopen(search_url)
+    except HTTPError as he:        
+        if he.code == 404:
+            print("No search results for {}, skipping.".format(search_term))
+            with open(out_dir + "_failed.txt", "w") as f:
+                f.write(he.reason)
+            return []
     src = page.read().decode("UTF-8")
     htmlpage = html.fromstring(src)
     icon_paths = '//div[@class="icon--holder"]/img'
